@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+  
+  --animate-slide-in: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fade-in: fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--color-slate-50);
+    color: var(--color-slate-900);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  .dark body {
+    background-color: var(--color-zinc-950);
+    color: var(--color-zinc-100);
+  }
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(241, 245, 249, 0.6);
+}
+
+.dark .glass-panel {
+  background-color: rgba(18, 18, 22, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(39, 39, 42, 0.4);
+}
+
+/* Premium Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(63, 63, 70, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(82, 82, 91, 0.7);
+}
+
+/* Virtualized list list styling */
+.virtual-list-container {
+  overflow-y: auto;
+  position: relative;
+  will-change: transform;
+}
+
+/* Custom animation helper for Kanban transitions */
+.kanban-column-dragging {
+  opacity: 0.4;
+}
+
+.task-card-dragging {
+  opacity: 0.3;
+  transform: rotate(2deg);
+}
