@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // TODO(security): In production, session tokens must be issued by a backend via secure HttpOnly cookies.
     // We are simulating authentication success here.
     localStorage.setItem('tf_session_active', 'true');
-    const currentUser = mockDb.getCurrentUser();
+    const currentUser = mockDb.loginUser(email);
     set({ user: currentUser, isAuthenticated: true, isLoading: false });
     return true;
   },
@@ -60,7 +60,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     // TODO(security): Use Argon2/bcrypt on the server to hash passwords. Never transmit or store plain text passwords.
     localStorage.setItem('tf_session_active', 'true');
-    const currentUser = mockDb.getCurrentUser();
+    const currentUser = mockDb.registerUser(name, email);
     set({ user: currentUser, isAuthenticated: true, isLoading: false });
     return true;
   },
@@ -68,6 +68,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     // TODO(security): Invalidate session on the backend.
     localStorage.removeItem('tf_session_active');
+    localStorage.removeItem('tf_current_user_id');
     
     // Clear client-side memory states
     set({ user: null, isAuthenticated: false });

@@ -336,20 +336,127 @@ export const mockDb = {
 
   getCurrentUser: (): User => {
     const users = mockDb.getUsers();
-    return users.find(u => u.id === 'user-me') || {
+    const currentUserId = localStorage.getItem('tf_current_user_id') || 'user-me';
+    const user = users.find(u => u.id === currentUserId);
+    if (user) {
+      return user;
+    }
+    // Fallback to John Doe
+    const fallbackUser = users.find(u => u.id === 'user-me') || {
       id: 'user-me',
       name: 'John Doe',
       email: 'john.doe@taskflow.so',
       avatarUrl: DEFAULT_USERS[0].avatarUrl,
       activeWorkspaceId: 'ws-acme',
-      createdAt: new Date().toISOString()
+      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     };
+    return { ...fallbackUser, activeWorkspaceId: mockDb.getActiveWorkspaceId() };
   },
 
   updateCurrentUserProfile: (name: string, email: string, avatarUrl?: string): User => {
     const rawUsers = getStorageItem<Omit<User, 'activeWorkspaceId'>[]>('tf_users', DEFAULT_USERS);
-    const updated = rawUsers.map(u => u.id === 'user-me' ? { ...u, name, email, avatarUrl } : u);
+    const currentUserId = localStorage.getItem('tf_current_user_id') || 'user-me';
+    const updated = rawUsers.map(u => u.id === currentUserId ? { ...u, name, email, avatarUrl: avatarUrl || u.avatarUrl } : u);
     setStorageItem('tf_users', updated);
+    return mockDb.getCurrentUser();
+  },
+
+  registerUser: (name: string, email: string): User => {
+    const rawUsers = getStorageItem<Omit<User, 'activeWorkspaceId'>[]>('tf_users', DEFAULT_USERS);
+    
+    // Check if user already exists
+    const existingUser = rawUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (existingUser) {
+      localStorage.setItem('tf_current_user_id', existingUser.id);
+      return mockDb.getCurrentUser();
+    }
+    
+    const id = 'user-' + Math.random().toString(36).substring(2, 9);
+    const avatarUrl = `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 99999)}?w=100&h=100&fit=crop&crop=faces`;
+    
+    const newUser: Omit<User, 'activeWorkspaceId'> = {
+      id,
+      name,
+      email,
+      avatarUrl,
+      createdAt: new Date().toISOString(),
+    };
+    
+    rawUsers.push(newUser);
+    setStorageItem('tf_users', rawUsers);
+    localStorage.setItem('tf_current_user_id', id);
+    
+    // Add to workspaces
+    const workspaces = mockDb.getWorkspaces();
+    
+    // 1. Add to Acme Product Team
+    const acmeWorkspace = workspaces.find(w => w.id === 'ws-acme');
+    if (acmeWorkspace) {
+      const alreadyMember = acmeWorkspace.members.some(m => m.userId === id);
+      if (!alreadyMember) {
+        acmeWorkspace.members.push({
+          userId: id,
+          name,
+          email,
+          avatarUrl,
+          role: 'member'
+        });
+      }
+    }
+    
+    // 2. Create a personal workspace for them
+    const personalWorkspaceId = 'ws-personal-' + id;
+    const personalWorkspace: Workspace = {
+      id: personalWorkspaceId,
+      name: `${name}'s Space`,
+      slug: `personal-${id}`,
+      description: 'Personal task flow dashboard, side projects, and study tracking.',
+      members: [
+        { userId: id, name, email, avatarUrl, role: 'owner' }
+      ]
+    };
+    workspaces.push(personalWorkspace);
+    
+    setStorageItem('tf_workspaces', workspaces);
+    localStorage.setItem('tf_active_workspace_id', 'ws-acme');
+    
+    return mockDb.getCurrentUser();
+  },
+
+  loginUser: (email: string): User => {
+    const rawUsers = getStorageItem<Omit<User, 'activeWorkspaceId'>[]>('tf_users', DEFAULT_USERS);
+    const existingUser = rawUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+    
+    if (!existingUser) {
+      // If user does not exist, let's auto-register them using their email prefix as name
+      const namePrefix = email.split('@')[0];
+      const name = namePrefix.charAt(0).toUpperCase() + namePrefix.slice(1).replace('.', ' ');
+      return mockDb.registerUser(name, email);
+    }
+    
+    localStorage.setItem('tf_current_user_id', existingUser.id);
+    
+    // Find if the workspace is set or if they are in Acme Product Team
+    const workspaces = mockDb.getWorkspaces();
+    const userWorkspace = workspaces.find(w => w.members.some(m => m.userId === existingUser.id));
+    if (userWorkspace) {
+      localStorage.setItem('tf_active_workspace_id', userWorkspace.id);
+    } else {
+      // Add them to ws-acme
+      const acmeWorkspace = workspaces.find(w => w.id === 'ws-acme');
+      if (acmeWorkspace) {
+        acmeWorkspace.members.push({
+          userId: existingUser.id,
+          name: existingUser.name,
+          email: existingUser.email,
+          avatarUrl: existingUser.avatarUrl,
+          role: 'member'
+        });
+        setStorageItem('tf_workspaces', workspaces);
+      }
+      localStorage.setItem('tf_active_workspace_id', 'ws-acme');
+    }
+    
     return mockDb.getCurrentUser();
   },
 
@@ -374,13 +481,14 @@ export const mockDb = {
     const workspaces = mockDb.getWorkspaces();
     const id = 'ws-' + Math.random().toString(36).substring(2, 9);
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const currentUser = mockDb.getCurrentUser();
     const newWorkspace: Workspace = {
       id,
       name,
       slug,
       description,
       members: [
-        { userId: 'user-me', name: 'John Doe', email: 'john.doe@taskflow.so', avatarUrl: DEFAULT_USERS[0].avatarUrl, role: 'owner' }
+        { userId: currentUser.id, name: currentUser.name, email: currentUser.email, avatarUrl: currentUser.avatarUrl, role: 'owner' }
       ]
     };
     workspaces.push(newWorkspace);
@@ -458,10 +566,11 @@ export const mockDb = {
     setStorageItem('tf_tasks', tasks);
 
     // Log Activity
+    const currentUser = mockDb.getCurrentUser();
     mockDb.logActivity({
-      userId: 'user-me',
-      userName: 'John Doe',
-      userAvatar: DEFAULT_USERS[0].avatarUrl,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatarUrl,
       action: 'created task',
       taskTitle: newTask.title,
       taskId: newTask.id,
@@ -474,6 +583,7 @@ export const mockDb = {
   updateTask: (taskId: string, updates: Partial<Task>): Task => {
     const tasks = mockDb.getTasks();
     let updatedTask: Task | null = null;
+    const currentUser = mockDb.getCurrentUser();
     
     const updatedTasks = tasks.map((t) => {
       if (t.id === taskId) {
@@ -481,9 +591,9 @@ export const mockDb = {
         if (updates.columnId && updates.columnId !== t.columnId) {
           const toCol = DEFAULT_COLUMNS.find(c => c.id === updates.columnId)?.title || updates.columnId;
           mockDb.logActivity({
-            userId: 'user-me',
-            userName: 'John Doe',
-            userAvatar: DEFAULT_USERS[0].avatarUrl,
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userAvatar: currentUser.avatarUrl,
             action: `moved to ${toCol}`,
             taskTitle: t.title,
             taskId: t.id,
@@ -515,10 +625,11 @@ export const mockDb = {
     setStorageItem('tf_tasks', filteredTasks);
 
     // Log Activity
+    const currentUser = mockDb.getCurrentUser();
     mockDb.logActivity({
-      userId: 'user-me',
-      userName: 'John Doe',
-      userAvatar: DEFAULT_USERS[0].avatarUrl,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatarUrl,
       action: 'deleted task',
       taskTitle: taskToDelete.title,
       taskId: taskToDelete.id,
@@ -531,11 +642,12 @@ export const mockDb = {
     const task = tasks.find(t => t.id === taskId);
     if (!task) throw new Error('Task not found');
 
+    const currentUser = mockDb.getCurrentUser();
     const comment: Comment = {
       id: 'c-' + Math.random().toString(36).substring(2, 9),
-      userId: 'user-me',
-      userName: 'John Doe',
-      userAvatar: DEFAULT_USERS[0].avatarUrl,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatarUrl,
       content,
       createdAt: new Date().toISOString(),
     };
@@ -544,9 +656,9 @@ export const mockDb = {
     setStorageItem('tf_tasks', tasks);
 
     mockDb.logActivity({
-      userId: 'user-me',
-      userName: 'John Doe',
-      userAvatar: DEFAULT_USERS[0].avatarUrl,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatarUrl,
       action: 'commented on',
       taskTitle: task.title,
       taskId: task.id,
